@@ -1,0 +1,23 @@
+services:
+  clamd:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes:
+      - clamav-db:/var/lib/clamav
+      - ${SCAN_PATH:-./}:/scan:ro
+
+  sentry:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    depends_on: [clamd]
+    environment:
+      SENTRY_CLAMD: tcp://clamd:3310
+    volumes:
+      - ${SCAN_PATH:-./}:/scan:ro
+      - sentry-home:/home/sentry/.sentry
+    command: ["scan", "custom", "/scan", "--no-behavior", "--no-persistence", "--json"]
+
+volumes:
+  clamav-db:
+  sentry-home:

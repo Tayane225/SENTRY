@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "SENTRY main window: core features only. Security actions go through the local engine API.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

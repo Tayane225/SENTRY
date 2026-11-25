@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "sentry": {
+      "command": "sentry",
+      "args": [
+        "mcp"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "sentry_doctor",
+        "sentry_list_drives",
+        "sentry_scan_status",
+        "sentry_list_scans",
+        "sentry_get_findings",
+        "sentry_get_finding",
+        "sentry_get_report",
+        "sentry_list_approvals",
+        "sentry_quarantine_list",
+        "sentry_repair_plan",
+        "sentry_agents",
+        "sentry_metrics",
+        "sentry_audit_verify"
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "sentry": {
+      "type": "stdio",
+      "command": "sentry",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}
