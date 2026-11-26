@@ -47,17 +47,39 @@ def decide(command: str) -> str | None:
     return None
 
 
-def _flagged_paths() -> list[str]:
-    try:
-        from sentry_engine.engine import Engine
+def _sentry_home() -> str:
+    """Same default location as sentry_engine.config.default_home(), without importing the engine (speed)."""
+    env = os.environ.get("SENTRY_HOME")
+    if env:
+        return os.path.abspath(os.path.expanduser(env))
+    if os.name == "nt":
+        return os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser(r"~\AppData\Local"), "Sentry")
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Application Support/Sentry")
+    return os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "sentry")
 
-        e = Engine()
-        rows = e.store.query("SELECT path FROM findings WHERE path IS NOT NULL AND status IN ('open','approved','failed') LIMIT 5000")
-        paths = [r["path"] for r in rows]
-        paths.append(str(e.paths.vault))
+
+def _flagged_paths() -> list[str]:
+    """Open SENTRY findings, read straight from its SQLite database in read-only mode (stdlib only, fast)."""
+    import sqlite3
+    from pathlib import Path
+
+    home = _sentry_home()
+    db = Path(home) / "sentry.db"
+    paths = [os.path.join(home, "vault")]
+    if not db.exists():
         return paths
-    except Exception:
-        return []
+    try:
+        conn = sqlite3.connect(f"{db.as_uri()}?mode=ro", uri=True, timeout=2)
+        try:
+            rows = conn.execute("SELECT path FROM findings WHERE path IS NOT NULL AND status IN ('open','approved','failed') "
+                                "LIMIT 5000").fetchall()
+        finally:
+            conn.close()
+        paths += [r[0] for r in rows]
+    except sqlite3.Error:
+        pass
+    return paths
 
 
 def main() -> int:
