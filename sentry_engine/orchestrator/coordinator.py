@@ -74,10 +74,11 @@ def request_cancel(scan_id: str) -> bool:
 
 class Coordinator:
     def __init__(self, engine: "Engine", options: ScanOptions, on_progress: Callable[[ScanProgress], None] | None = None,
-                 scan_id: str | None = None):
+                 scan_id: str | None = None, on_created: Callable[[], None] | None = None):
         self.engine = engine
         self.options = options
         self.on_progress = on_progress
+        self.on_created = on_created  # called once the scan record exists (callers may poll status from then on)
         self.scan_id = scan_id or new_id("S", 5)
         self.progress = ScanProgress(self.scan_id)
         self.online = engine.settings.online_intel if options.online_intel is None else bool(options.online_intel)
@@ -88,6 +89,8 @@ class Coordinator:
         e = self.engine
         e.store.create_scan(self.scan_id, self.options.kind, self.options.roots, self.options.to_dict(), os.getpid(),
                             self.options.requested_by)
+        if self.on_created:
+            self.on_created()
         e.audit.append("scan.started", self.options.requested_by, {"scan_id": self.scan_id, "kind": self.options.kind,
                                                                    "roots": self.options.roots})
         try:
@@ -320,18 +323,23 @@ class Coordinator:
 
 
 def run_scan_in_thread(engine: "Engine", options: ScanOptions) -> str:
-    """Start a scan in a background thread and return its id immediately (API/MCP)."""
+    """Start a scan in a background thread and return its id as soon as its record exists (API/MCP).
+
+    Returning only after the scan row is stored guarantees that an immediate status poll never
+    sees "unknown scan" (a race that showed up on fast Linux CI runners).
+    """
     scan_id = new_id("S", 5)
-    started = threading.Event()
+    created = threading.Event()
 
     def target() -> None:
-        coord = Coordinator(engine, options, scan_id=scan_id)  # the store uses one SQLite connection per thread
-        started.set()
+        coord = Coordinator(engine, options, scan_id=scan_id, on_created=created.set)  # one SQLite connection per thread
         try:
             coord.run()
         except Exception:
             pass
+        finally:
+            created.set()  # never leave the caller waiting if the scan failed before its record was written
 
     threading.Thread(target=target, name=f"scan-{scan_id}", daemon=True).start()
-    started.wait(timeout=10)
+    created.wait(timeout=30)
     return scan_id
