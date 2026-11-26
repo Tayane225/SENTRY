@@ -61,7 +61,7 @@ def score_evidence(evidence: list[Evidence]) -> tuple[float, dict[str, Any]]:
     trusted_sig = next((e for e in evidence if e.verdict == Verdict.CLEAN.value and e.engine == "authenticode"), None)
     weights = []
     for e in evidence:
-        if e.verdict == Verdict.CLEAN.value or e.weight <= 0:
+        if e.verdict in (Verdict.CLEAN.value, Verdict.INFO.value) or e.weight <= 0:  # info is context, never suspicion
             continue
         w = e.weight
         if trusted_sig and e.verdict != Verdict.MALICIOUS.value and (

@@ -68,6 +68,16 @@ def _unsafe_name(name: str) -> bool:
     return n.startswith("/") or (len(n) > 1 and n[1] == ":") or any(part == ".." for part in n.split("/"))
 
 
+def _link_escapes(name: str, target: str) -> bool:
+    """A relative link that climbs out of the archive root. Absolute links (/usr/bin/x) are normal in OS images."""
+    import posixpath
+
+    if not target or target.startswith("/"):
+        return False
+    resolved = posixpath.normpath(posixpath.join(posixpath.dirname(name.replace("\\", "/")), target))
+    return resolved == ".." or resolved.startswith("../")
+
+
 def inspect_archive(data: bytes, magic: str, limits: ArchiveLimits, depth: int = 1,
                     report: ArchiveReport | None = None, budget: _Budget | None = None,
                     container: str = "") -> ArchiveReport:
@@ -178,7 +188,7 @@ def _inspect_tar(data, limits, depth, report, budget, container) -> None:
                 report.evidence.append(Evidence(engine="archive", rule="archive.too_many_members", weight=20,
                                                 description="Too many tar members; possible archive bomb"))
                 break
-            if _unsafe_name(member.name) or (member.issym() or member.islnk()) and _unsafe_name(member.linkname or ""):
+            if _unsafe_name(member.name) or (member.issym() or member.islnk()) and _link_escapes(member.name, member.linkname or ""):
                 report.evidence.append(Evidence(engine="archive", rule="archive.path_traversal", weight=40,
                                                 description="Tar member escapes the extraction directory (absolute, '..' or link)",
                                                 details={"member": member.name[:200]}))
